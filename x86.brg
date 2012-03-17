@@ -1,0 +1,3368 @@
+%{
+    /*
+       FILE: sample4.brg
+  
+       Copyright (c) 1997 Princeton University
+
+       All rights reserved.
+
+       This software is to be used for non-commercial purposes only,
+       unless authorized permission to do otherwise is obtained.  
+       For more information, contact spam@ee.princeton.edu
+     */
+
+#include <assert.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include "llvm/Instruction.h"
+#include "SymbolTable.h"
+#include <stdio.h>
+#include <string.h>
+
+    enum {
+        ADDI = 309, ADDRLP = 295, ASGNI = 53,
+        CNSTI = 128, CVCI = 85, I0I = 661, INDIRC = 67, STORE = 28, MEM = 111, ADD = 8, SUB = 9, AND = 10, OR = 11, XOR = 12, MUL = 13, LOAD = 27,
+        MEM8 = 112, MEM16 = 113, MEM32 = 114, MEM64 = 115, GLOB8 = 116, GLOB16 = 117, GLOB32 = 118, GLOB64 = 119, TRUNC8=120, TRUNC16=121, TRUNC32=122, TRUNC64=123,SEXT8=124, SEXT16=125, SEXT32=126,  
+        SEXT64=127, RET8=129, RET16=130, RET32=131, RET64=132, ARG8=133, ARG16=134, ARG32=135, ARG64=136,OFFSET=137, GEP=138
+    };
+
+    char *word_length[] = {
+        /* 0 */ "Zero Sized.",
+        /* 1 */ "movc",
+        /* 2 */ "movb",
+        /* 3 */ "3 bytes cannot happen",
+        /* 4 */ "movl",
+        /* 5 */ "5 bit move ",
+        /* 6 */ "6 bit move ",
+        /* 7 */ "7 bit move ",
+        /* 8 */ "movq",
+    };
+
+    FILE* fp;
+
+    typedef struct tree {
+        int op;
+        struct tree * kids[2];
+        int val;
+        const char* name;
+        llvm::Instruction* inst;
+
+        struct {
+            struct burm_state *state;
+        } x;
+    } *NODEPTR, *Tree;
+#define GET_KIDS(p)	((p)->kids)
+#define PANIC printf
+#define STATE_LABEL(p) ((p)->x.state)
+#define SET_STATE(p,s) (p)->x.state=(s)
+#define DEFAULT_COST	break
+#define NO_ACTION(x)
+
+    typedef struct COST {
+        int cost;
+    } COST;
+#define COST_LESS(a,b) ((a).cost < (b).cost)
+
+    static COST COST_INFINITY = {32767};
+    static COST COST_ZERO = {0};
+
+    /*static char* burm_string = "FOO";*/
+    static int _ern = 0;
+
+    int OP_LABEL(NODEPTR p) {
+        switch (p->op) {
+            case CNSTI: if (p->val == 0) return 661 /* I0I */;
+            default: return p->op;
+        }
+    }
+
+
+    static void burm_trace(NODEPTR, int, int, int);
+%}
+%term BURP = 0 ADDI = 309 ADDRLP = 295 ASGNI = 53 STORE = 28 ADD = 8 SUB = 9 AND = 10 OR = 11 XOR = 12 MUL = 13 LOAD = 27
+%term CNSTI = 128 CVCI = 85 I0I = 661 INDIRC = 67 MEM8 = 112 MEM16 = 113 MEM32 = 114 MEM64 = 115 GLOB8 = 116 GLOB16 = 117 GLOB32 = 118 GLOB64 = 119 TRUNC8=120 TRUNC16=121 TRUNC32=122 TRUNC64=123
+%term SEXT8=124 SEXT16=125 SEXT32=126 SEXT64=127 RET8=129 RET16=130 RET32=131 RET64=132 ARG8=133 ARG16=134 ARG32=135 ARG64=136 OFFSET=137 GEP=138 SHL=139 LSHR=139 ASHR=140 UDIV=141
+%declare<void> stmt<int indent>;
+%declare<const char*> ireg<int indent>;
+%declare<const char*> ireg8<int indent>;
+%declare<const char*> ireg16<int indent>;
+%declare<const char*> ireg32<int indent>;
+%declare<const char*> ireg64<int indent>;
+%declare<int> imem8<int indent>;
+%declare<int> imem16<int indent>;
+%declare<int> imem32<int indent>;
+%declare<int> imem64<int indent>;
+%%
+stmt : ireg8
+{
+    $cost[0].cost = $cost[1].cost;
+}
+= {
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    fp = fopen("CodeGen.asm", "a");
+    $action[1](indent + 1);
+    fclose(fp);
+};
+
+stmt : ireg16
+{
+    $cost[0].cost = $cost[1].cost;
+}
+= {
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    fp = fopen("CodeGen.asm", "a");
+    $action[1](indent + 1);
+    fclose(fp);
+};
+
+stmt : ireg32
+{
+    $cost[0].cost = $cost[1].cost;
+}
+= {
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    fp = fopen("CodeGen.asm", "a");
+    $action[1](indent + 1);
+    fclose(fp);
+};
+
+stmt : ireg64
+{
+    $cost[0].cost = $cost[1].cost;
+}
+= {
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    fp = fopen("CodeGen.asm", "a");
+    $action[1](indent + 1);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM8, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    fprintf(fp, "  movb $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    fprintf(stderr, "  movb $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM16, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    fprintf(fp, "  movw $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    fprintf(stderr, "  movw $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM32, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    fprintf(fp, "  movl $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    fprintf(stderr, "  movl $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM64, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    fprintf(fp, "  movq $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    fprintf(stderr, "  movq $%d , -%d(%%rbp) \n", $3->val, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(ireg64, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    fprintf(fp, "  movl $%d , (%%%s) \n", $3->val,getReg64($2->inst));
+    fprintf(stderr, "  movl $%d , (%%%s) \n", $3->val, getReg64($2->inst));
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM8,ARG8) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    const char* Reg1;
+    if($3->val < 6){
+      Reg1 = getArgReg($3->val,8);
+      fprintf(fp, "  movb %%%s , -%d(%%rbp) \n", Reg1, $2->val);
+    }
+    else{
+      fprintf(fp, "  movb %d(%%rbp) , %%bl \n", getArgOffset($3->val));
+      fprintf(fp, "  movb %%bl , -%d(%%rbp) \n", $2->val);
+      fprintf(stderr, "  movb %d(%%rbp) , %%bl \n", getArgOffset($3->val));
+      fprintf(stderr, "  movb %%bl , -%d(%%rbp) \n", $2->val);
+    }
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM16,ARG16) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    const char* Reg1;
+    if($3->val < 6){
+      Reg1 = getArgReg($3->val,16);
+      fprintf(fp, "  movw %%%s , -%d(%%rbp) \n", Reg1, $2->val);
+    }
+    else{
+      fprintf(fp, "  movw %d(%%rbp) , %%bx \n", getArgOffset($3->val));
+      fprintf(fp, "  movw %%bx , -%d(%%rbp) \n", $2->val);
+      fprintf(stderr, "  movw %d(%%rbp) , %%bx \n", getArgOffset($3->val));
+      fprintf(stderr, "  movw %%bx , -%d(%%rbp) \n", $2->val);
+    }
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM32,ARG32) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    const char* Reg1;
+    if($3->val < 6){
+      Reg1 = getArgReg($3->val,32);
+      fprintf(fp, "  movl %%%s , -%d(%%rbp) \n", Reg1, $2->val);
+    }
+    else{
+      fprintf(fp, "  movl %d(%%rbp) , %%ebx \n", getArgOffset($3->val));
+      fprintf(fp, "  movl %%ebx , -%d(%%rbp) \n", $2->val);
+      fprintf(stderr, "  movl %d(%%rbp) , %%ebx \n", getArgOffset($3->val));
+      fprintf(stderr, "  movl %%ebx , -%d(%%rbp) \n", $2->val);
+    }
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM64,ARG64) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    const char* Reg1;
+    if($3->val < 6){
+      Reg1 = getArgReg($3->val,64);
+      fprintf(fp, "  movq %%%s , -%d(%%rbp) \n", Reg1, $2->val);
+    }
+    else{
+      fprintf(fp, "  movq %d(%%rbp) , %%bl \n", getArgOffset($3->val));
+      fprintf(fp, "  movq %%rbx , -%d(%%rbp) \n", $2->val);
+      fprintf(stderr, "  movq %d(%%rbp) , %%bl \n", getArgOffset($3->val));
+      fprintf(stderr, "  movq %%rbx , -%d(%%rbp) \n", $2->val);
+    }
+    fclose(fp);
+};
+
+stmt:
+STORE(ireg64, ireg8) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    fprintf(fp, "  movb $%%%s , (%%%s) \n", getReg8($3->inst),getReg64($2->inst));
+    fprintf(stderr, "  movb $%%%s , (%%%s) \n", getReg8($3->inst), getReg64($2->inst));
+    fclose(fp);
+};
+
+stmt:
+STORE(ireg64, ireg16) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    fprintf(fp, "  movw $%%%s , (%%%s) \n", getReg16($3->inst),getReg64($2->inst));
+    fprintf(stderr, "  movw $%%%s , (%%%s) \n", getReg16($3->inst), getReg64($2->inst));
+    fclose(fp);
+};
+
+stmt:
+STORE(ireg64, ireg32) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    fprintf(fp, "  movd $%%%s , (%%%s) \n", getReg32($3->inst),getReg64($2->inst));
+    fprintf(stderr, "  movd $%%%s , (%%%s) \n", getReg32($3->inst), getReg64($2->inst));
+    fclose(fp);
+};
+
+stmt:
+STORE(ireg64, ireg64) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    fprintf(fp, "  movq $%%%s , (%%%s) \n", getReg64($3->inst),getReg64($2->inst));
+    fprintf(stderr, "  movq $%%%s , (%%%s) \n", getReg64($3->inst), getReg64($2->inst));
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM8, ireg8) {
+    $cost[0].cost = $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[3](indent + 1);
+    const char* regist = getReg8($3->inst);
+    fprintf(fp, "  movb  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movb  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM16, ireg16) {
+    $cost[0].cost = $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[3](indent + 1);
+    const char* regist = getReg16($3->inst);
+    fprintf(fp, "  movw  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movw  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM32, ireg32) {
+    $cost[0].cost = $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[3](indent + 1);
+    const char* regist = getReg32($3->inst);
+    fprintf(fp, "  movl  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movl  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM32, ireg64) {
+    $cost[0].cost = $cost[3].cost + 2;//pointers produced such match in a way type checked 
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[3](indent + 1);
+    const char* regist = getReg32($3->inst);
+    fprintf(fp, "  movl  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movl  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(MEM64, ireg64) {
+    $cost[0].cost = $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[3](indent + 1);
+    const char* regist = getReg64($3->inst);
+    fprintf(fp, "  movq  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movq  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(imem8, ireg8) {
+    $cost[0].cost = $cost[2].cost + $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    const char* regist = getReg8($3->inst);
+    fprintf(fp, "  movb  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movb  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(imem16, ireg16) {
+    $cost[0].cost = $cost[2].cost + $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    const char* regist = getReg16($3->inst);
+    fprintf(fp, "  movw  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movw  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(imem32, ireg32) {
+    $cost[0].cost = $cost[2].cost + $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    const char* regist = getReg32($3->inst);
+    fprintf(fp, "  movl  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movl  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(imem64, ireg64) {
+    $cost[0].cost = $cost[2].cost + $cost[3].cost + 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    int i;
+    for (i = 0; i < indent; i++)
+        fprintf(stderr, " ");
+    $action[2](indent + 1);
+    $action[3](indent + 1);
+    const char* regist = getReg64($3->inst);
+    fprintf(fp, "  movq  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    fprintf(stderr, "  movq  %%%s, -%d(%%rbp) \n", regist, $2->val);
+    remove_Regs($1->inst);
+    fclose(fp);
+};
+
+stmt:
+STORE(GLOB8, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    if ($2->val == 0) {
+        fprintf(fp, "  movb  $%d, %s(%%rip) \n", $3->val, $2->name);
+        fprintf(stderr, "  movb  $%d, %s(%%rip) \n", $3->val, $2->name);
+    } else {
+        fprintf(fp, "  movb  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+        fprintf(stderr, "  movb  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+    }
+    remove_Regs($1->inst);
+    fprintf(stderr, "\n Finished const global store \n");
+    fclose(fp);
+};
+
+stmt:
+STORE(GLOB16, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    if ($2->val == 0) {
+        fprintf(fp, "  movw  $%d, %s(%%rip) \n", $3->val, $2->name);
+        fprintf(stderr, "  movw  $%d, %s(%%rip) \n", $3->val, $2->name);
+    } else {
+        fprintf(fp, "  movw  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+        fprintf(stderr, "  movw  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+    }
+    remove_Regs($1->inst);
+    fprintf(stderr, "\n Finished const global store \n");
+    fclose(fp);
+};
+
+stmt:
+STORE(GLOB32, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    if ($2->val == 0) {
+        fprintf(fp, "  movl  $%d, %s(%%rip) \n", $3->val, $2->name);
+        fprintf(stderr, "  movl  $%d, %s(%%rip) \n", $3->val, $2->name);
+    } else {
+        fprintf(fp, "  movl  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+        fprintf(stderr, "  movl  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+    }
+    remove_Regs($1->inst);
+    fprintf(stderr, "\n Finished const global store \n");
+    fclose(fp);
+};
+
+stmt:
+STORE(GLOB64, CNSTI) {
+    $cost[0].cost = 2;
+}
+= {
+    fp = fopen("CodeGen.asm", "a");
+    if ($2->val == 0) {
+        fprintf(fp, "  movq  $%d, %s(%%rip) \n", $3->val, $2->name);
+        fprintf(stderr, "  movq  $%d, %s(%%rip) \n", $3->val, $2->name);
+    } else {
+        fprintf(fp, "  movq  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+        fprintf(stderr, "  movq  $%d, %s+%d(%%rip) \n", $3->val, $2->name, $2->val);
+    }
+    remove_Regs($1->inst);
+    fprintf(stderr, "\n Finished const global store \n");
+    fclose(fp);
+};
+
+ireg8:
+ADD(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ADD reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  addb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  addb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+ADD(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ADD reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  addw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  addw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+ADD(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ADD reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  addl  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  addl  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+ADD(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ADD reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  addq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  addq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    ADD(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  addb -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  addb -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg16:
+    ADD(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  addw -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  addw -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg32:
+    ADD(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  addl -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  addl -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg64:
+    ADD(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  addq -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  addq -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg8:
+    ADD(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "addb %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "addb %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    ADD(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "  addw $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "  addw $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    ADD(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "  addl $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "  addl $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    ADD(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "  addq $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "  addq $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg8:
+SUB(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SUB reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  subb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  subb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+SUB(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SUB reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  subw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  subw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+SUB(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SUB reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  subl  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  subl  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+SUB(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SUB reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  subq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  subq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    SUB(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  subb -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  subb -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg16:
+    SUB(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  subw -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  subw -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg32:
+    SUB(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  subl -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  subl -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg64:
+    SUB(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  subq -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  subq -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg8:
+    SUB(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "subb $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "subb $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    SUB(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "subw $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "subw $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    SUB(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "  subl $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "  subl $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    SUB(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "subq %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "subq %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg8:
+OR(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched OR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  orb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  orb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+OR(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched OR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  orw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  orw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+OR(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched OR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  orl  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  orl  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+OR(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched OR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  orq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  orq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    OR(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  orb -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  orb -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg16:
+    OR(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  orw -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  orw -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg32:
+    OR(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  orl -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  orl -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg64:
+    OR(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memor = $action[3](indent + 1);
+
+        fprintf(fp, "  orq -%d(%%rbp), %%%s \n", memor, regist2);
+        fprintf(stderr, "  orq -%d(%%rbp), %%%s \n", memor, regist2);
+        return regist2;
+    };
+
+ireg8:
+    OR(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "orb %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "orb %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    OR(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "orw %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "orw %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    OR(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "orl %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "orl %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    OR(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "orq %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "orq %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg8:
+XOR(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched XOR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  xorb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  xorb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+XOR(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched XOR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  xorw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  xorw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+XOR(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched XOR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  xorl  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  xorl  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+XOR(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched XOR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  xorq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  xorq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    XOR(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memxor = $action[3](indent + 1);
+
+        fprintf(fp, "  xorb -%d(%%rbp), %%%s \n", memxor, regist2);
+        fprintf(stderr, "  xorb -%d(%%rbp), %%%s \n", memxor, regist2);
+        return regist2;
+    };
+
+ireg16:
+    XOR(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memxor = $action[3](indent + 1);
+
+        fprintf(fp, "  xorw -%d(%%rbp), %%%s \n", memxor, regist2);
+        fprintf(stderr, "  xorw -%d(%%rbp), %%%s \n", memxor, regist2);
+        return regist2;
+    };
+
+ireg32:
+    XOR(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memxor = $action[3](indent + 1);
+
+        fprintf(fp, "  xorl -%d(%%rbp), %%%s \n", memxor, regist2);
+        fprintf(stderr, "  xorl -%d(%%rbp), %%%s \n", memxor, regist2);
+        return regist2;
+    };
+
+ireg64:
+    XOR(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memxor = $action[3](indent + 1);
+
+        fprintf(fp, "  xorq -%d(%%rbp), %%%s \n", memxor, regist2);
+        fprintf(stderr, "  xorq -%d(%%rbp), %%%s \n", memxor, regist2);
+        return regist2;
+    };
+
+ireg8:
+    XOR(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "xorb %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "xorb %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    XOR(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "  xorw %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "  xorw %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    XOR(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "  xorl %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "  xorl %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    XOR(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "  xorq %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "  xorq %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg8:
+MUL(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched MUL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  imulb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  imulb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+MUL(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched MUL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  imulw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  imulw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+MUL(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched MUL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  imull  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  imull  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+MUL(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched MUL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  imulq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  imulq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    MUL(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memimul = $action[3](indent + 1);
+
+        fprintf(fp, "  imulb -%d(%%rbp), %%%s \n", memimul, regist2);
+        fprintf(stderr, "  imulb -%d(%%rbp), %%%s \n", memimul, regist2);
+        return regist2;
+    };
+
+ireg16:
+    MUL(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memimul = $action[3](indent + 1);
+
+        fprintf(fp, "  imulw -%d(%%rbp), %%%s \n", memimul, regist2);
+        fprintf(stderr, "  imulw -%d(%%rbp), %%%s \n", memimul, regist2);
+        return regist2;
+    };
+
+ireg32:
+    MUL(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memimul = $action[3](indent + 1);
+
+        fprintf(fp, "  imull -%d(%%rbp), %%%s \n", memimul, regist2);
+        fprintf(stderr, "  imull -%d(%%rbp), %%%s \n", memimul, regist2);
+        return regist2;
+    };
+
+ireg64:
+    MUL(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memimul = $action[3](indent + 1);
+
+        fprintf(fp, "  imulq -%d(%%rbp), %%%s \n", memimul, regist2);
+        fprintf(stderr, "  imulq -%d(%%rbp), %%%s \n", memimul, regist2);
+        return regist2;
+    };
+
+ireg8:
+    MUL(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "imulb $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "imulb $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    MUL(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "imulw $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "imulw $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    MUL(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "imull $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "imull $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    MUL(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "imulq $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "imulq $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+
+ireg8:
+SHL(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SHL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shlb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shlb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+SHL(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SHL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shlw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shlw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+SHL(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SHL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shll  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shll  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+SHL(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched SHL reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shlq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shlq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    SHL(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshl = $action[3](indent + 1);
+
+        fprintf(fp, "  shlb -%d(%%rbp), %%%s \n", memshl, regist2);
+        fprintf(stderr, "  shlb -%d(%%rbp), %%%s \n", memshl, regist2);
+        return regist2;
+    };
+
+ireg16:
+    SHL(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshl = $action[3](indent + 1);
+
+        fprintf(fp, "  shlw -%d(%%rbp), %%%s \n", memshl, regist2);
+        fprintf(stderr, "  shlw -%d(%%rbp), %%%s \n", memshl, regist2);
+        return regist2;
+    };
+
+ireg32:
+    SHL(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshl = $action[3](indent + 1);
+
+        fprintf(fp, "  shll -%d(%%rbp), %%%s \n", memshl, regist2);
+        fprintf(stderr, "  shll -%d(%%rbp), %%%s \n", memshl, regist2);
+        return regist2;
+    };
+
+ireg64:
+    SHL(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshl = $action[3](indent + 1);
+
+        fprintf(fp, "  shlq -%d(%%rbp), %%%s \n", memshl, regist2);
+        fprintf(stderr, "  shlq -%d(%%rbp), %%%s \n", memshl, regist2);
+        return regist2;
+    };
+
+ireg8:
+    SHL(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shlb $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shlb $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    SHL(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shlw $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shlw $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    SHL(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shll $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shll $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    SHL(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shlq $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shlq $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg8:
+LSHR(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched LSHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shrb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shrb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+LSHR(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched LSHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shrw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shrw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+LSHR(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched LSHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shrl  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shrl  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+LSHR(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched LSHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  shrq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  shrq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    LSHR(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshr = $action[3](indent + 1);
+
+        fprintf(fp, "  shrb -%d(%%rbp), %%%s \n", memshr, regist2);
+        fprintf(stderr, "  shrb -%d(%%rbp), %%%s \n", memshr, regist2);
+        return regist2;
+    };
+
+ireg16:
+    LSHR(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshr = $action[3](indent + 1);
+
+        fprintf(fp, "  shrw -%d(%%rbp), %%%s \n", memshr, regist2);
+        fprintf(stderr, "  shrw -%d(%%rbp), %%%s \n", memshr, regist2);
+        return regist2;
+    };
+
+ireg32:
+    LSHR(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshr = $action[3](indent + 1);
+
+        fprintf(fp, "  shrl -%d(%%rbp), %%%s \n", memshr, regist2);
+        fprintf(stderr, "  shrl -%d(%%rbp), %%%s \n", memshr, regist2);
+        return regist2;
+    };
+
+ireg64:
+    LSHR(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memshr = $action[3](indent + 1);
+
+        fprintf(fp, "  shrq -%d(%%rbp), %%%s \n", memshr, regist2);
+        fprintf(stderr, "  shrq -%d(%%rbp), %%%s \n", memshr, regist2);
+        return regist2;
+    };
+
+ireg8:
+    LSHR(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shrb %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shrb %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    LSHR(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shrw %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shrw %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    LSHR(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shrl $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shrl $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    LSHR(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "shrq $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "shrq $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg8:
+ASHR(ireg8, ireg8) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ASHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($3->inst);
+        const char* regist3 = getReg8($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  sarb  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  sarb  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg16:
+ASHR(ireg16, ireg16) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ASHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($3->inst);
+        const char* regist3 = getReg16($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  sarw  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  sarw  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg32:
+ASHR(ireg32, ireg32) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ASHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($3->inst);
+        const char* regist3 = getReg32($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  sarl  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  sarl  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+ireg64:
+ASHR(ireg64, ireg64) {
+    $cost[0].cost = 2; //$cost[2].cost + $cost[3].cost + 2;}                                                                
+    = {
+        fprintf(stderr, "Matched ASHR reg,reg");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        $action[3](indent + 1);
+
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($3->inst);
+        const char* regist3 = getReg64($1->inst);
+
+        if (strcmp(regist1, regist3)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist3);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist3);
+        }
+
+        fprintf(fp, "  sarq  %%%s, %%%s \n", regist2, regist3);
+        fprintf(stderr, "  sarq  %%%s, %%%s \n", regist2, regist3);
+        return regist3;
+    };
+
+
+ireg8:
+    ASHR(ireg8, imem8) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movb  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movb  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memsar = $action[3](indent + 1);
+
+        fprintf(fp, "  sarb -%d(%%rbp), %%%s \n", memsar, regist2);
+        fprintf(stderr, "  sarb -%d(%%rbp), %%%s \n", memsar, regist2);
+        return regist2;
+    };
+
+ireg16:
+    ASHR(ireg16, imem16) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movw  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movw  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memsar = $action[3](indent + 1);
+
+        fprintf(fp, "  sarw -%d(%%rbp), %%%s \n", memsar, regist2);
+        fprintf(stderr, "  sarw -%d(%%rbp), %%%s \n", memsar, regist2);
+        return regist2;
+    };
+
+ireg32:
+    ASHR(ireg32, imem32) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movl  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movl  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memsar = $action[3](indent + 1);
+
+        fprintf(fp, "  sarl -%d(%%rbp), %%%s \n", memsar, regist2);
+        fprintf(stderr, "  sarl -%d(%%rbp), %%%s \n", memsar, regist2);
+        return regist2;
+    };
+
+ireg64:
+    ASHR(ireg64, imem64) {
+        $cost[0].cost = $cost[2].cost+$cost[3].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist1 = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist1, regist2)) {
+            fprintf(fp, "  movq  %%%s, %%%s \n", regist1, regist2);
+            fprintf(stderr, "  movq  %%%s, %%%s \n", regist1, regist2);
+        }
+        int memsar = $action[3](indent + 1);
+
+        fprintf(fp, "  sarq -%d(%%rbp), %%%s \n", memsar, regist2);
+        fprintf(stderr, "  sarq -%d(%%rbp), %%%s \n", memsar, regist2);
+        return regist2;
+    };
+
+ireg8:
+    ASHR(ireg8, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg8($2->inst);
+        const char* regist2 = getReg8($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movb  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movb  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "sarb %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "sarb %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg16:
+    ASHR(ireg16, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg16($2->inst);
+        const char* regist2 = getReg16($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movw  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movw  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "sarw %d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "sarw %d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg32:
+    ASHR(ireg32, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg32($2->inst);
+        const char* regist2 = getReg32($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movl  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movl  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "sarl $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "sarl $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg64:
+    ASHR(ireg64, CNSTI) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        const char* regist = getReg64($2->inst);
+        const char* regist2 = getReg64($1->inst);
+        if (strcmp(regist, regist2)) {
+            fprintf(fp, "movq  %%%s, %%%s \n", regist, regist2);
+            fprintf(stderr, "movq  %%%s, %%%s \n", regist, regist2);
+        }
+
+        fprintf(fp, "sarq $%d, %%%s \n", $3->val, regist2);
+        fprintf(stderr, "sarq $%d, %%%s  \n", $3->val, regist2);
+        return regist2;
+    };
+
+ireg8:
+    TRUNC8(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+        return getReg8($1->inst);
+    };
+ireg16:
+    TRUNC16(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+       int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+       return getReg16($1->inst);
+    };
+ireg32:
+    TRUNC32(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+       return getReg32($1->inst);
+    };
+ireg64:
+    TRUNC64(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+       return getReg64($1->inst);
+    };
+
+ireg8:
+    RET8 {
+        $cost[0].cost = 0;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        return getReg8($1->inst);
+    };
+ireg16:
+    RET16 {
+        $cost[0].cost = 0;
+    }
+    = {
+       int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+       return getReg16($1->inst);
+    };
+ireg32:
+    RET32 {
+        $cost[0].cost = 0;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+       return getReg32($1->inst);
+    };
+ireg64:
+    RET64 {
+        $cost[0].cost = 0;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+       return getReg64($1->inst);
+    };
+
+ireg8:
+    SEXT8(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+	const char* reg1;
+	const char* op;
+        int source = $1->val;
+        if(source == 8){
+	  reg1 = getReg8($1->inst->getOperand(0));
+	  op = "movsbb";
+	}
+	else if(source == 16){
+	  reg1 = getReg16($1->inst->getOperand(0));
+	  op = "movsbw";
+	}
+	else if(source == 32){
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movsbl";
+	}
+	else if(source == 64){
+	  reg1 = getReg64($1->inst->getOperand(0));
+	  op = "movsbq";
+	}
+	else{
+	  fprintf(stderr, "\n ************** NO MATCH FOR REG IN SEXT ************* \n");
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movsbl";
+	}
+        const char* reg2 = getReg8($1->inst);
+	fprintf(fp, "  %s %%%s, %%%s \n",op ,reg1, reg2);
+        fprintf(stderr, "  %s %%%s, %%%s  \n",op ,reg1, reg2);
+        return reg2;
+    };
+ireg16:
+    SEXT16(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+       int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+	const char* reg1;
+	const char* op;
+        int source = $1->val;
+        if(source == 8){
+	  reg1 = getReg8($1->inst->getOperand(0));
+	  op = "movsbw";
+	}
+	else if(source == 16){
+	  reg1 = getReg16($1->inst->getOperand(0));
+	  op = "movsww";
+	}
+	else if(source == 32){
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movslw";
+	}
+	else if(source == 64){
+	  reg1 = getReg64($1->inst->getOperand(0));
+	  op = "movsqw";
+	}
+	else{
+	  fprintf(stderr, "\n ************** NO MATCH FOR REG IN SEXT ************* \n");
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movswl";
+	}
+        const char* reg2 = getReg16($1->inst);
+	fprintf(fp, "  %s %%%s, %%%s \n",op ,reg1, reg2);
+        fprintf(stderr, "  %s %%%s, %%%s  \n",op ,reg1, reg2);
+        return reg2;
+    };
+ireg32:
+    SEXT32(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+	const char* reg1;
+	const char* op;
+        int source = $1->val;
+        if(source == 8){
+	  reg1 = getReg8($1->inst->getOperand(0));
+	  op = "movsbl";
+	}
+	else if(source == 16){
+	  reg1 = getReg16($1->inst->getOperand(0));
+	  op = "movswl";
+	}
+	else if(source == 32){
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movsll";
+	}
+	else if(source == 64){
+	  reg1 = getReg64($1->inst->getOperand(0));
+	  op = "movsql";
+	}
+	else{
+	  fprintf(stderr, "\n ************** NO MATCH FOR REG IN SEXT ************* \n");
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movsll";
+	}
+        const char* reg2 = getReg32($1->inst);
+	fprintf(fp, "  %s %%%s, %%%s \n",op ,reg1, reg2);
+        fprintf(stderr, "  %s %%%s, %%%s  \n",op ,reg1, reg2);
+        return reg2;
+    };
+ireg64:
+    SEXT64(ireg) {
+        $cost[0].cost = $cost[2].cost + 2;
+    }
+    = {// will never happen just for debugging
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[2](indent + 1);
+	const char* reg1;
+	const char* op;
+        int source = $1->val;
+        if(source == 8){
+	  reg1 = getReg8($1->inst->getOperand(0));
+	  op = "movsbq";
+	}
+	else if(source == 16){
+	  reg1 = getReg16($1->inst->getOperand(0));
+	  op = "movswq";
+	}
+	else if(source == 32){
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movslq";
+	}
+	else if(source == 64){
+	  reg1 = getReg64($1->inst->getOperand(0));
+	  op = "movsqq";
+	}
+	else{
+	  fprintf(stderr, "\n ************** NO MATCH FOR REG IN SEXT ************* \n");
+	  reg1 = getReg32($1->inst->getOperand(0));
+	  op = "movsql";
+	}
+        const char* reg2 = getReg64($1->inst);
+	fprintf(fp, "  %s %%%s, %%%s \n",op ,reg1, reg2);
+        fprintf(stderr, "  %s %%%s, %%%s  \n",op ,reg1, reg2);
+        return reg2;
+    };
+
+imem8:
+    LOAD(MEM8) {
+        $cost[0].cost = 0;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "Load mem to mem Matched \n", burm_string[_ern]);                                                
+        return $2->val;
+    };
+
+imem16:
+    LOAD(MEM16) {
+        $cost[0].cost = 0;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "Load mem to mem Matched \n", burm_string[_ern]);                                                
+        return $2->val;
+    };
+
+imem32:
+    LOAD(MEM32) {
+        $cost[0].cost = 0;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "Load mem to mem Matched \n", burm_string[_ern]);                                                
+        return $2->val;
+    };
+
+imem64:
+    LOAD(MEM64) {
+        $cost[0].cost = 0;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "Load mem to mem Matched \n", burm_string[_ern]);                                                
+        return $2->val;
+    };
+
+ireg8:
+    LOAD(MEM8) {
+        $cost[0].cost = 1;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "LOAD mem32 to reg Matched \n");
+        bool inRegister = inReg($2->inst);
+        const char* regist = getReg8($1->inst);
+        if (!inRegister) {
+            fprintf(fp, "  movb  -%d(%%rbp),%%%s \n", $2->val, regist);
+            fprintf(stderr, "  movb -%d(%%rbp),%%%s \n", $2->val, regist);
+        }
+        return regist;
+    };
+ireg16:
+    LOAD(MEM16) {
+        $cost[0].cost = 1;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "LOAD mem32 to reg Matched \n");
+        bool inRegister = inReg($2->inst);
+        const char* regist = getReg16($1->inst);
+        if (!inRegister) {
+            fprintf(fp, "  movw  -%d(%%rbp),%%%s \n", $2->val, regist);
+            fprintf(stderr, "  movw -%d(%%rbp),%%%s \n", $2->val, regist);
+        }
+        return regist;
+    };
+ireg32:
+    LOAD(MEM32) {
+        $cost[0].cost = 1;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "LOAD mem32 to reg Matched \n");
+        bool inRegister = inReg($2->inst);
+        const char* regist = getReg32($1->inst);
+        if (!inRegister) {
+            fprintf(fp, "  movl  -%d(%%rbp),%%%s \n", $2->val, regist);
+            fprintf(stderr, "  movl -%d(%%rbp),%%%s \n", $2->val, regist);
+        }
+        return regist;
+    };
+ireg64:
+    LOAD(MEM64) {
+        $cost[0].cost = 1;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        //    fprintf(stderr, "LOAD mem32 to reg Matched \n");
+        bool inRegister = inReg($2->inst);
+        const char* regist = getReg64($1->inst);
+        if (!inRegister) {
+            fprintf(fp, "  movq  -%d(%%rbp),%%%s \n", $2->val, regist);
+            fprintf(stderr, "  movq -%d(%%rbp),%%%s \n", $2->val, regist);
+        }
+        return regist;
+    };
+ireg8:
+    LOAD(GLOB8) {
+        $cost[0].cost = 1;
+    }
+    = {
+        fprintf(stderr, "Matching Load GloB\n");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        bool inRegister = inReg($2->inst->getOperand(0));
+        const char* regist = getReg8($1->inst);
+        if (!inRegister) {
+            if ($2->val == 0) {
+                fprintf(fp, "  mov %s(%%rip),%%%s \n", $2->inst->getOperand(0)->getNameStr().c_str(), regist);
+                fprintf(stderr, "  mov %s(%%rip),%%%s \n", $2->name, regist); //inst->getOperand(0)->getNameStr().c_str()             
+            } else {
+                fprintf(fp, "  mov %s+%d(%%rip),%%%s \n", $2->inst->getOperand(0)->getNameStr().c_str(), $2->val, regist);
+                fprintf(stderr, "  mov %s+%d(%%rip),%%%s \n", $2->name, $2->val, regist); //inst->getOperand(0)->getNameStr().c_str()      
+            }
+        }
+        return regist;
+    };
+ireg16:
+    LOAD(GLOB16) {
+        $cost[0].cost = 1;
+    }
+    = {
+        fprintf(stderr, "Matching Load GloB\n");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        bool inRegister = inReg($2->inst->getOperand(0));
+        const char* regist = getReg16($1->inst);
+        if (!inRegister) {
+            if ($2->val == 0) {
+                fprintf(fp, "  mov %s(%%rip),%%%s \n", $2->inst->getOperand(0)->getNameStr().c_str(), regist);
+                fprintf(stderr, "  mov %s(%%rip),%%%s \n", $2->name, regist); //inst->getOperand(0)->getNameStr().c_str()             
+            } else {
+                fprintf(fp, "  mov %s+%d(%%rip),%%%s \n", $2->inst->getOperand(0)->getNameStr().c_str(), $2->val, regist);
+                fprintf(stderr, "  mov %s+%d(%%rip),%%%s \n", $2->name, $2->val, regist); //inst->getOperand(0)->getNameStr().c_str()      
+            }
+        }
+        return regist;
+    };
+ireg32:
+    LOAD(GLOB32) {
+        $cost[0].cost = 1;
+    }
+    = {
+        fprintf(stderr, "Matching Load GloB\n");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        bool inRegister = inReg($2->inst->getOperand(0));
+        const char* regist = getReg32($1->inst);
+        if (!inRegister) {
+            if ($2->val == 0) {
+                fprintf(fp, "  mov %s(%%rip),%%%s \n", $2->name, regist);
+                fprintf(stderr, "  mov %s(%%rip),%%%s \n", $2->name, regist); //inst->getOperand(0)->getNameStr().c_str()             
+            } else {
+                fprintf(fp, "  mov %s+%d(%%rip),%%%s \n", $2->name, $2->val, regist);
+                fprintf(stderr, "  mov %s+%d(%%rip),%%%s \n", $2->name, $2->val, regist); //inst->getOperand(0)->getNameStr().c_str()      
+            }
+        }
+        return regist;
+    };
+ireg64:
+    LOAD(GLOB64) {
+        $cost[0].cost = 1;
+    }
+    = {
+        fprintf(stderr, "Matching Load GloB\n");
+        int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        bool inRegister = inReg($2->inst->getOperand(0));
+        const char* regist = getReg64($1->inst);
+        if (!inRegister) {
+            if ($2->val == 0) {
+                fprintf(fp, "  mov %s(%%rip),%%%s \n", $2->name, regist);
+                fprintf(stderr, "  mov %s(%%rip),%%%s \n", $2->name, regist); //inst->getOperand(0)->getNameStr().c_str()             
+            } else {
+                fprintf(fp, "  mov %s+%d(%%rip),%%%s \n", $2->name, $2->val, regist);
+                fprintf(stderr, "  mov %s+%d(%%rip),%%%s \n", $2->name, $2->val, regist); //inst->getOperand(0)->getNameStr().c_str()      
+            }
+        }
+        return regist;
+    };
+ireg64:
+    LOAD(ireg64) {
+        $cost[0].cost = 1;
+    }
+    = {
+        int i;
+        for (i = 0; i < indent; i++)
+           fprintf(stderr, " ");
+        $action[2](indent + 1);
+        bool inRegister = inReg($1->inst);
+        const char* regist = getReg64($1->inst);
+    //    if (!inRegister) {
+            fprintf(fp, "  movq  (%%%s),%%%s \n", getReg64($2->inst), regist);
+            fprintf(stderr, "  movq (%%%s),%%%s \n", getReg64($2->inst), regist);
+    //    }
+        return regist;
+    };
+
+imem8:
+    MEM8
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+        //    fprintf(stderr, "Matched MEM \n");                                                                               
+        return $1->val;
+    };
+imem16:
+    MEM16
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+        //    fprintf(stderr, "Matched MEM \n");                                                                               
+        return $1->val;
+    };
+imem32:
+    MEM32
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+        //    fprintf(stderr, "Matched MEM \n");                                                                               
+        return $1->val;
+    };
+imem64:
+    MEM64
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+        //    fprintf(stderr, "Matched MEM \n");                                                                               
+        return $1->val;
+    };
+ireg:
+    ireg8
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[1](indent + 1);
+        return "";
+    };
+ireg:
+    ireg16
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[1](indent + 1);
+        return "";
+    };
+ireg:
+    ireg32
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[1](indent + 1);
+        return "";
+    };
+ireg:
+    ireg64
+    {
+        $cost[0].cost = 0;
+    }
+    = {
+	int i;
+        for (i = 0; i < indent; i++)
+            fprintf(stderr, " ");
+        $action[1](indent + 1);
+        return "";
+    };
+%%
+
+    static int trace;
+
+    /* burm_trace - print trace message for matching p; decrement trace */
+    static void burm_trace(NODEPTR p, int eruleno, int cost, int bestcost) {
+        if (trace < 0)
+            fprintf(stderr, "0x%x matched %s = %d with cost %d vs. %d\n", p,
+                burm_string[eruleno], eruleno, cost, bestcost);
+        else if (trace > 0 && cost < bestcost) {
+            --trace;
+            fprintf(stderr, "0x%x matched %s = %d with cost %d\n", p,
+                    burm_string[eruleno], eruleno, cost);
+        }
+    }
+
+    static void gen(NODEPTR p) {
+        if (burm_label(p) == 0)
+            fprintf(stderr, "no cover\n");
+        else {
+            stmt_action(p->x.state, 0);
+            dumpCover(p, 1, 0);
+        }
+    }
+
+    static Tree tree(int op, Tree l, Tree r) {
+        Tree t = (Tree) malloc(sizeof *t);
+
+        t->op = op;
+        t->kids[0] = l;
+        t->kids[1] = r;
+        t->val = 0;
+        t->x.state = 0;
+        return t;
+    }
+
+    //main(void) {
+    //	Tree t;
+    //
+    //	if (getenv("Trace"))
+    //		trace = atoi(getenv("Trace"));
+    //	printf("i = c + 4;\n");
+    //	t = tree(STORE,
+    //        tree(MEM,0,0),
+    //        (t = tree(CNSTI,0,0), t->val =4, t));
+    ////  t = tree(ASGNI,
+    ////		tree(ADDRLP, 0, 0),
+    ////		tree(ADDI,
+    ////			tree(CVCI, tree(INDIRC, tree(ADDRLP, 0, 0), 0), 0),
+    ////			(t = tree(CNSTI, 0, 0), t->val = 4, t)
+    ////		)
+    ////	);
+    //	gen(t);
+    //	return 0;
+    //}
