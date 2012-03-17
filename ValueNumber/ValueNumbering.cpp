@@ -1,0 +1,387 @@
+
+
+#include "ValueNumbering.h"
+#include "Expressiontable.h"
+#include "NameTable.h"
+#include "ValNumTable.h"
+#include "llvm/Support/Debug.h"
+#define debug(x) x
+extern NameTable nameTable;
+extern ExpressionHashTable expressionHashTable;
+extern ValNumTable valNumTable;
+
+std::vector<Value*> temporaries;
+std::vector<Instruction*> arrayRefs;
+void store_nv(Instruction* I);
+void sext_nv(Instruction* I);
+void load_nv(Instruction* I);
+void ret_nv(Instruction* I);
+void gep_nv(Instruction* I);
+void call_nv(Instruction* I);
+void alloca_nv(Instruction* I);
+void binaryop_nv(Instruction* I);
+int eval(unsigned int op, int val1, int val2);
+
+std::vector<Instruction*> deleteInstructions;
+
+namespace {
+
+    struct ValueNumber : public BasicBlockPass {
+        static char ID; // Pass identification, replacement for typeid
+
+        ValueNumber() : BasicBlockPass(ID) {
+        }
+
+        virtual bool runOnBasicBlock(BasicBlock & BB) {
+            for (BasicBlock::iterator BI = BB.begin(), BE = BB.end(); BI != BE; ++BI) {
+                int InsOpcode = BI->getOpcode();
+                switch (InsOpcode) {
+                    case STORE:
+                        store_nv(BI);
+                        break;
+                    case LOAD:
+                        load_nv(BI);
+                        break;
+                    case ADD:
+                    case FADD:
+                    case SUB:
+                    case FSUB:
+                    case MUL:
+                    case FMUL:
+                    case UDIV:
+                    case SDIV:
+                    case FDIV:
+                    case UREM:
+                    case SREM:
+                    case FREM:
+                    case SHL:
+                    case LSHR:
+                    case ASHR:
+                    case AND:
+                    case OR:
+                    case XOR: 
+                        binaryop_nv(BI);
+                        break;
+                    case ALLOCA:
+                        alloca_nv(BI);
+                        break;
+                    case GEP:
+                        gep_nv(BI);
+                        break;
+                    case SEXT:
+                        sext_nv(BI);
+                        break;
+                    case CALL:
+                        call_nv(BI);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            errs() << "Contents of the Tables at the end \n \n ";
+                printHashTable();
+                errs() << "\n";
+                printNameTable();
+                errs() << "\n";
+                printValNumTable();
+                errs() << "\n";
+            deleteNameTable();
+            deleteExpressionTable();
+            deleteValNumTable();
+            
+            errs() << "Basic Block After Constant Propagation.\n";
+            errs() << BB;
+            
+            errs() << "\n ***** Instructions that can be Deleted ****** \n";
+            for (std::vector<Instruction*>::reverse_iterator itb = deleteInstructions.rbegin(), ite = deleteInstructions.rend(); itb != ite; itb++) {
+
+                errs() << "----------->  " << (**itb) << " <----------- "<<"\n";
+                if ((*itb)->use_empty()) {
+                    (*itb)->eraseFromParent();
+                }
+            }
+            errs() << "\n ***** Instructions that can be Deleted ****** \n\n";
+            deleteInstructions.clear();
+            errs() << "Removing Useless Instruction and Doing Constant  Folding";
+            errs() << "\n";
+            errs() << BB;
+            
+//            Function::viewCFG();
+            DEBUG(errs() << "YAYYYYYYYYYYYYYYYYYYYAAAAAYY\n");
+            errs() << "End of Basic Block\n\n";
+            return true;
+        }
+
+    };
+}
+int ValNum = 0;
+
+
+void call_nv(Instruction* I){
+    deleteNameTable();
+    deleteExpressionTable();
+    deleteValNumTable();
+}
+
+void sext_nv(Instruction* I){
+    DEBUG(errs() << "executing statement  " << *I << "\n");
+    int val = getValNum(I->getOperand(0));
+    
+    if (isa<ConstantInt > (I->getOperand(0))) {
+        int val1 = (dyn_cast<llvm::ConstantInt>) (I->getOperand(0))->getSExtValue();
+        llvm::Value* constValue = llvm::ConstantInt::getSigned(I->getType(), val1);
+        I->replaceAllUsesWith(constValue);
+        deleteInstructions.push_back(I);
+        return;
+    } else if (isConstantNametable(val)) {
+        I->replaceAllUsesWith(getValueNameTable(getValNum(I->getOperand(0))));
+        deleteInstructions.push_back(I);
+        return;
+    } else {
+        updateValNum(I, val);
+        insertNameTable(val, I);
+    }
+//    printHashTable();
+//    printNameTable();
+//    printValNumTable();
+    DEBUG(errs() << "Finished statement  " << *I << "\n");
+}
+
+void alloca_nv(Instruction* I) {
+    DEBUG(errs() << "executing statement  " << *I << "\n");
+    temporaries.push_back(I);
+//    printHashTable();
+//    printNameTable();
+//    printValNumTable();
+    DEBUG(errs() << "Finished statement  " << *I << "\n");
+}
+
+Value* getArrayRef(Instruction* I){
+    for(std::vector<Instruction*>::iterator begin = arrayRefs.begin(), end = arrayRefs.end(); begin != end ; begin++){
+        (*begin)->getOpcode();
+        if(((*begin)->getOpcode() == I->getOpcode()) && (I->getNumOperands() == (*begin)->getNumOperands())){
+             if((I->getOperand(0) == (*begin)->getOperand(0)) && (I->getOperand(1) == (*begin)->getOperand(1))
+                     && (I->getOperand(2) == (*begin)->getOperand(2))){
+                return (*begin);
+             }
+       }
+    }
+    return NULL;
+}
+
+void gep_nv(Instruction* I){
+    DEBUG(errs() << "executing statement  " << *I << "\n");      
+    if(getArrayRef(I) != NULL){
+        I->replaceAllUsesWith(getArrayRef(I));
+        deleteInstructions.push_back(I);    
+    }
+    else{
+        temporaries.push_back(I);
+        arrayRefs.push_back(I);
+        removeArrayRefs(I);
+    } 
+//    printHashTable();
+//    printNameTable();
+//    printValNumTable();
+    DEBUG(errs() << "Finished statement  " << *I << "\n");
+}
+
+void store_nv(Instruction* I) {
+    DEBUG(errs() << "executing statement  " << *I << "\n");
+
+    removeExpressionHavingOperand(I->getOperand(1));
+    removeFromNameTableList(getValNum(I->getOperand(1)), I->getOperand(1));
+
+
+    if (isa<llvm::ConstantInt > (I->getOperand(0))) {
+        updateValNum(I->getOperand(1), ValNum);
+        insertNameTable(ValNum, I->getOperand(1), I->getOperand(0), true);
+    } else {
+        if (existsValNum(I->getOperand(0))) {
+
+            updateValNum(I->getOperand(1), getValNum(I->getOperand(0)));
+            insertNameTable(getValNum(I->getOperand(0)), I->getOperand(1));
+        } else {
+            updateValNum(I->getOperand(1), ValNum);
+            insertNameTable(ValNum, I->getOperand(1), I->getOperand(0), false);
+        }
+    }
+
+    ValNum++;
+//    printHashTable();
+//    printNameTable();
+//    printValNumTable();
+    DEBUG(errs() << "Finished statement  " << *I << "\n");
+}
+
+void load_nv(Instruction* I) {
+    DEBUG(errs() << "executing statement  " << *I << "\n");
+    //if(I->getOperand(0)->)
+        //clear table when pointer load.
+        
+    if (existsValNum(I->getOperand(0))) {
+        
+        if(isConstantNametable(getValNum(I->getOperand(0)))){
+            I->replaceAllUsesWith(getValueNameTable(getValNum(I->getOperand(0))));
+            deleteInstructions.push_back(I);
+            return;
+        }
+        
+        int value = getValNum(I->getOperand(0));
+        NameList* nl = getNameListNameTable(value);
+        bool alreadyLoaded = false;
+        for (NameList::iterator begin = nl->begin(), end = nl->end(); begin != end; begin++) {
+            if (std::find(temporaries.begin(), temporaries.end(), *begin) == temporaries.end()) {
+                alreadyLoaded = true;
+                I->replaceAllUsesWith(*begin);
+                break;
+            }
+        }
+        if (alreadyLoaded) {
+            deleteInstructions.push_back(I);
+        } else {
+            updateValNum(I, value);
+            insertNameTable(value, I);
+        }
+    } else {
+        updateValNum(I->getOperand(0), ValNum);
+        updateValNum(I, ValNum);
+        insertNameTable(ValNum, I, I->getOperand(0), false);
+        ValNum++;
+    }
+
+//    printHashTable();       
+//    printNameTable();
+//    printValNumTable();
+    DEBUG(errs() << "Finished statement  " << *I << "\n");
+}
+
+
+int eval(unsigned int op, int val1, int val2) {
+    int result = 0;
+    switch (op) {
+
+        case ADD:
+            result = val1 + val2;
+            break;
+        case SUB:
+            result = val1 - val2;
+            break;
+        case MUL:
+            result = val1 * val2;
+            break;
+        case SDIV:
+            result = val1 / val2;
+            break;
+        case SREM:
+            result = val1 % val2;
+            break;
+        case FREM:
+            result = ( val2 + val1 % val2 ) % val2 ;
+            break;
+        case UDIV:
+            result = ((unsigned int)val1)/((unsigned int)val2);
+            break;
+        case UREM:
+            result = ( (unsigned int)val2 + val1 % (unsigned int)val2 ) % (unsigned int)val2 ;
+            break;
+        case SHL:
+            result = (val1) << val2;
+            break;
+        case LSHR:
+            result = ((unsigned int)val1) >> val2;
+            break;
+        case ASHR:
+            result = val1 << val2;
+            break;
+        case AND: 
+            result = val1 & val2;
+            break;
+        case OR:
+            result = val1 | val2;
+            break;
+        case XOR: 
+            result = val1 ^ val2;
+            break;
+        default:
+            break;
+    }
+    return result;
+}
+
+void binaryop_nv(Instruction* I) {
+    DEBUG(errs() << "executing statement  " << *I << "\n");
+
+    if (existsValNum(I->getOperand(0))) {errs() << "here\n";
+        if (isConstantNametable(getValNum(I->getOperand(0)))) {
+            DEBUG(errs() << "setting find operand to constant \n");
+            I->setOperand(0, getValueNameTable(getValNum(I->getOperand(0))));
+        }
+    }
+
+    if (existsValNum(I->getOperand(1))) {
+        if (isConstantNametable(getValNum(I->getOperand(1)))) {
+            DEBUG(errs() << "setting find operand to constant \n");
+            I->setOperand(1, getValueNameTable(getValNum(I->getOperand(1))));
+        }
+    }
+    
+    if (isa<llvm::ConstantInt > (I->getOperand(0)) && isa<llvm::ConstantInt > (I->getOperand(1))) {
+        int val1 = (dyn_cast<llvm::ConstantInt>) (I->getOperand(0))->getSExtValue();
+        int val2 = (dyn_cast<llvm::ConstantInt>) (I->getOperand(1))->getSExtValue();
+        int val3 = eval(I->getOpcode(), val1, val2);
+        //        ConstantInt* ci = new ConstantInt();
+        llvm::Value* constValue = llvm::ConstantInt::getSigned((dyn_cast<llvm::ConstantInt>) (I->getOperand(0))->getType(), val3);
+        if (isa<ConstantInt > (constValue)) {
+            DEBUG(errs() << " \n Created a Constant Value. \n");
+        }
+        I->replaceAllUsesWith(constValue);
+        updateValNum(I, ValNum);
+        insertNameTable(ValNum, I, constValue, true);
+        ValNum++;
+        deleteInstructions.push_back(I);
+        return;
+    } else {
+        if (existsExpressionHashTable(I)) {
+            updateValNum(I, getValNumExpressionTable(I));
+            I->replaceAllUsesWith(getInstructionExpressionTable(I));
+            if (existsNameTable(getValNumExpressionTable(I))) {
+                insertNameTable(getValNumExpressionTable(I), I);
+            }
+            deleteInstructions.push_back(I);
+        } else {
+            insertExpressionHashTable(I, ValNum);
+            insertValNum(I, ValNum);
+            ValNum++;
+        }
+    }
+//    printHashTable();
+//    printNameTable();
+//    printValNumTable();
+    DEBUG(errs() << "Finished statement  " << *I << "\n");
+
+}
+
+
+
+char ValueNumber::ID = 0;
+INITIALIZE_PASS(ValueNumber, "valueNumber", "Value Number Pass", false, false);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

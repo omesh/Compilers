@@ -1,0 +1,20 @@
+/* 
+ * File:   IncHeaders.h
+ * Author: veri
+ *
+ * Created on 26 January, 2012, 4:43 PM
+ */
+
+#ifndef INCHEADERS_H
+#define	INCHEADERS_H
+#include <map>
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/ADT/Statistic.h"
+#include <string>
+#include <sstream>
+#include <llvm/Constants.h>
+#include "llvm/Function.h"
+#include "llvm/Pass.h"
+
+#endif	/* INCHEADERS_H */
+

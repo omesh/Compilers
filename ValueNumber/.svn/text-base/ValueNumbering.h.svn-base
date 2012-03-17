@@ -1,0 +1,38 @@
+/* 
+ * File:   ValueNumbering.h
+ * Author: veri
+ *
+ * Created on 26 January, 2012, 12:39 PM
+ */
+
+#ifndef VALUENUMBERING_H
+#define	VALUENUMBERING_H
+
+#include "IncHeaders.h"
+
+#define RET 1
+#define BR 2
+#define ADD 8
+#define SUB 10
+#define MUL 12
+#define SDIV 15
+#define SREM 18
+#define ALLOCA 26
+#define LOAD 27
+#define STORE 28
+#define GETELEMENTPTR 29
+#define TRUNC 30
+#define ZEXT 31
+#define SEXT 32
+#define ICMP 42
+#define CALL 45
+#define PHI 44
+#define SELECT 46
+
+
+
+
+
+
+#endif	/* VALUENUMBERING_H */
+

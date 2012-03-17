@@ -1,0 +1,134 @@
+#include "Expressiontable.h"
+#include "ValNumTable.h"
+
+ExpressionHashTable expressionHashTable;
+
+void insertExpressionHashTable(Instruction* I,int ValNum){ // Insert expression in HashTable
+    if(I->isCommutative()){
+        expressionHashTable.insert(ExpressionHashTablePair(I,ValNum));
+//        Instruction* iv = I->clone();
+//        Value* v1 = iv->getOperand(1);
+//        iv->setOperand(1,iv->getOperand(0));
+//        iv->setOperand(0,v1);
+//        expressionHashTable.insert(ExpressionHashTablePair(iv,ValNum));
+        
+    }
+    else{
+        expressionHashTable.insert(ExpressionHashTablePair(I,ValNum));
+    }
+}
+
+void deleteExpressionTable(){
+    expressionHashTable.clear();
+}
+
+int getValNumExpressionTable(Instruction* I){ // Get ValNum if expression present else return -1
+//    for(ExpressionHashTable::iterator begin = expressionHashTable.begin(), end = expressionHashTable.end(); begin != end ; begin++){
+//        bool result = false;
+//        if((begin->first->getOpcode() == I->getOpcode()) && (I->getNumOperands() == begin->first->getNumOperands())){
+//            result = true;
+//            for(unsigned int i=0 ; i < (begin->first)->getNumOperands() ; i++){    
+//                if((begin->first)->getOperand(i) != I->getOperand(i)){
+//                    result = false;
+//                }
+//            }
+//        }
+//        if(result) {return begin->second;}
+//    }
+    for(ExpressionHashTable::iterator begin = expressionHashTable.begin(), end = expressionHashTable.end(); begin != end ; begin++){
+        if((begin->first->getOpcode() == I->getOpcode()) && (I->getNumOperands() == begin->first->getNumOperands())){
+             if((getValNum(I->getOperand(0)) == getValNum(begin->first->getOperand(0))) && (getValNum(I->getOperand(1)) == getValNum(begin->first->getOperand(1)))){
+                return begin->second;
+            }
+            if((getValNum(I->getOperand(1))==getValNum(begin->first->getOperand(0))) && (getValNum(I->getOperand(0))==getValNum(begin->first->getOperand(1))) &&(I->isCommutative())){
+                return begin->second;
+            }
+        }
+    }
+    return -1;
+}
+
+Instruction* getInstructionExpressionTable(Instruction* I){ // return common expression if present else return NULL
+//    for(ExpressionHashTable::iterator begin = expressionHashTable.begin(), end = expressionHashTable.end(); begin != end ; begin++){
+//        bool result = false;
+//        if((begin->first->getOpcode() == I->getOpcode()) && (I->getNumOperands() == begin->first->getNumOperands())){
+//            result = true;
+//            for(unsigned int i=0 ; i < (begin->first)->getNumOperands() ; i++){    
+//                if((begin->first)->getOperand(i) != I->getOperand(i)){
+//                    result = false;
+//                }
+//            }
+//        }
+//        if(result) {return begin->first;}
+//    }
+//    return NULL;
+    
+    for(ExpressionHashTable::iterator begin = expressionHashTable.begin(), end = expressionHashTable.end(); begin != end ; begin++){
+       if((begin->first->getOpcode() == I->getOpcode()) && (I->getNumOperands() == begin->first->getNumOperands())){
+             if((getValNum(I->getOperand(0)) == getValNum(begin->first->getOperand(0))) && (getValNum(I->getOperand(1)) == getValNum(begin->first->getOperand(1)))){
+                return begin->first;
+            }
+            if((getValNum(I->getOperand(1))==getValNum(begin->first->getOperand(0))) && (getValNum(I->getOperand(0))==getValNum(begin->first->getOperand(1))) &&(I->isCommutative())){
+                return begin->first;
+            }
+        }
+    }
+    return NULL;
+}
+
+bool existsExpressionHashTable(Instruction* I){ // Check if expression exists in HAshTable
+    //compare opcodes and operands of instructions
+//    for(ExpressionHashTable::iterator begin = expressionHashTable.begin(), end = expressionHashTable.end(); begin != end ; begin++){
+//        bool result = false;
+//        if((begin->first->getOpcode() == I->getOpcode()) && (I->getNumOperands() == begin->first->getNumOperands())){
+//            result = true;
+//            for(unsigned int i=0 ; i < (begin->first)->getNumOperands() ; i++){    
+//                if((begin->first)->getOperand(i) != I->getOperand(i)){
+//                    result = false;
+//                }
+//            }
+//        }
+//        if(result) {return true;}
+//    }
+//    return false;
+    
+    for(ExpressionHashTable::iterator begin = expressionHashTable.begin(), end = expressionHashTable.end(); begin != end ; begin++){
+        if((begin->first->getOpcode() == I->getOpcode()) && (I->getNumOperands() == begin->first->getNumOperands())){
+             if((getValNum(I->getOperand(0)) == getValNum(begin->first->getOperand(0))) && (getValNum(I->getOperand(1)) == getValNum(begin->first->getOperand(1)))){
+                return true;
+            }
+            if((getValNum(I->getOperand(1))==getValNum(begin->first->getOperand(0))) && (getValNum(I->getOperand(0))==getValNum(begin->first->getOperand(1))) &&(I->isCommutative())){
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void removeExpressionHavingOperand(Value* V){ // Remove an Expression Having Operand V
+    std::vector<ExpressionHashTable::iterator> deleteExpressions;
+    for(ExpressionHashTable::iterator begin = expressionHashTable.begin(), end = expressionHashTable.end(); begin != end ; begin++){
+        if(isa<Instruction> (begin->first)){
+            for(unsigned int i=0 ; i < (cast<Instruction>(begin->first))->getNumOperands() ; i++){    
+                if((cast<Instruction>(begin->first))->getOperand(i) == V){
+                    deleteExpressions.push_back(begin);
+                }
+            }
+        }
+    }
+    
+    for(std::vector<ExpressionHashTable::iterator>::iterator begin = deleteExpressions.begin(), end = deleteExpressions.end();
+            begin != end; begin++){
+        expressionHashTable.erase(*begin);
+    }
+}
+
+void printHashTable() {
+    debug(errs() << "***** Printing contents of hashTable ");
+    debug(errs() << " (Expression    Value Number) \n");
+    for (ExpressionHashTable::iterator i = expressionHashTable.begin(), e = expressionHashTable.end(); i != e; i++) {
+        debug(errs() << *(i->first) << " ");
+        debug(errs() << i->second << "\n");
+    }
+    debug(errs() << "***** Finished Printing contents of hashTable \n");
+}

@@ -1,0 +1,65 @@
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/repo/!svn/ver/441/omesh/compiler/lib/Transforms/ValueNumber
+END
+ValNumTable.h
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/svn/repo/!svn/ver/448/omesh/compiler/lib/Transforms/ValueNumber/ValNumTable.h
+END
+ValueNumbering.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/svn/repo/!svn/ver/442/omesh/compiler/lib/Transforms/ValueNumber/ValueNumbering.cpp
+END
+Expressiontable.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 84
+/svn/repo/!svn/ver/443/omesh/compiler/lib/Transforms/ValueNumber/Expressiontable.cpp
+END
+NameTable.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/svn/repo/!svn/ver/445/omesh/compiler/lib/Transforms/ValueNumber/NameTable.cpp
+END
+ValueNumbering.h
+K 25
+svn:wc:ra_dav:version-url
+V 81
+/svn/repo/!svn/ver/441/omesh/compiler/lib/Transforms/ValueNumber/ValueNumbering.h
+END
+IncHeaders.h
+K 25
+svn:wc:ra_dav:version-url
+V 77
+/svn/repo/!svn/ver/441/omesh/compiler/lib/Transforms/ValueNumber/IncHeaders.h
+END
+ValNumTable.cpp
+K 25
+svn:wc:ra_dav:version-url
+V 80
+/svn/repo/!svn/ver/447/omesh/compiler/lib/Transforms/ValueNumber/ValNumTable.cpp
+END
+Expressiontable.h
+K 25
+svn:wc:ra_dav:version-url
+V 82
+/svn/repo/!svn/ver/444/omesh/compiler/lib/Transforms/ValueNumber/Expressiontable.h
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 73
+/svn/repo/!svn/ver/441/omesh/compiler/lib/Transforms/ValueNumber/Makefile
+END
+NameTable.h
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/svn/repo/!svn/ver/446/omesh/compiler/lib/Transforms/ValueNumber/NameTable.h
+END
